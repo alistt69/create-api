@@ -1,6 +1,6 @@
 {
   "name": "@alistt69/create-api",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Lightweight createApi with query/mutation/lazy hooks",
   "type": "module",
   "sideEffects": false,
