@@ -21,8 +21,9 @@
 
 ## 🚀 Demo
 
-- _[Live Demo](https://create-api-demo.vercel.app/)_
-- _Sandbox is coming soon..._
+_[Live Demo](https://create-api-demo.vercel.app/)_
+<br />
+_Sandbox is coming soon..._
 
 ## ✨ Overview
 
