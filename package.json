@@ -54,11 +54,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alistt69/alistt69-create-api.git"
+    "url": "git+https://github.com/alistt69/create-api.git"
   },
-  "homepage": "https://github.com/alistt69/alistt69-create-api#readme",
+  "homepage": "https://github.com/alistt69/create-api#readme",
   "bugs": {
-    "url": "https://github.com/alistt69/alistt69-create-api/issues"
+    "url": "https://github.com/alistt69/create-api/issues"
   },
   "keywords": [
     "react",
