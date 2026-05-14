@@ -19,6 +19,11 @@
   </tr>
 </table>
 
+## 🚀 Demo
+
+- [Live Demo](https://create-api-demo.vercel.app/)
+- **Interactive Sandbox:** Coming soon.
+
 ## ✨ Overview
 
 `@alistt69/create-api` is a lightweight [RTK Query-inspired](https://redux-toolkit.js.org/rtk-query/overview) helper for React apps that need a clean createApi experience without Redux.
