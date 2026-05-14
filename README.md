@@ -11,7 +11,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@alistt69/create-api.svg)](https://www.npmjs.com/package/@alistt69/create-api)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
-[![npm downloads](https://img.shields.io/npm/dw/@alistt69/create-api.svg)](https://www.npmjs.com/package/@alistt69/create-api)
+[![npm downloads](https://img.shields.io/npm/dm/@alistt69/create-api.svg)](https://www.npmjs.com/package/@alistt69/create-api)
 [![React Version](https://img.shields.io/badge/react-%3E%3D16.8-149eca?logo=react&logoColor=white)](https://react.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![CI](https://github.com/alistt69/alistt69-create-api/actions/workflows/ci.yml/badge.svg)](https://github.com/alistt69/alistt69-create-api/actions/workflows/ci.yml)
