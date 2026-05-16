@@ -1,13 +1,13 @@
 <table width="100%">
   <tr>
     <td width="190" align="center">
-      <img src="assets/alistt69-packages-logo.svg" alt="Logo" width="170" height="170" style="margin-top: 50px;" />
+      <img src="assets/alistt69-packages-logo.svg" alt="@alistt69 packages logo" width="160" height="160" />
     </td>
     <td>
       <h1>@alistt69/create-api</h1>
 
 > **One helper. No extra.**  
-> A lightweight createApi inspired by **RTKQ** — with query, lazy query and mutation hooks, built-in cache utilities, stale data handling and a tiny, focused API.
+> A lightweight createApi inspired by **RTKQ** — with query, lazy query and mutation hooks & endpoint controllers, built-in cache utilities, stale data handling and a tiny, focused API.
 
 [![npm version](https://img.shields.io/npm/v/@alistt69/create-api.svg)](https://www.npmjs.com/package/@alistt69/create-api)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
@@ -19,220 +19,382 @@
   </tr>
 </table>
 
-## 🚀 Demo
+---
 
-_[Live Demo](https://create-api-demo.vercel.app/)_
-<br />
-_Sandbox is coming soon..._
+<p align="center">
+  <a href="#install">Install</a>
+  &middot; <a href="#quick-start">Quick Start</a>
+  &middot; <a href="#the-shape">The Shape</a>
+  &middot; <a href="#cache">Cache</a>
+  &middot; <a href="#imperative-api">Imperative API</a>
+  &middot; <a href="#controller">Controller</a>
+</p>
 
-## ✨ Overview
+---
 
-`@alistt69/create-api` is a lightweight [RTK Query-inspired](https://redux-toolkit.js.org/rtk-query/overview) helper for React apps that need a clean createApi experience without Redux.
+## Why this exists
 
-It provides query, lazy query and mutation hooks, cache helpers and stale data support in a compact API designed for everyday app needs.
+`@alistt69/create-api` is for React projects that like the ergonomics of
+RTK Query, but do not want to introduce Redux just to fetch data.
 
-## 🔧  What’s inside
+It gives you a compact `createApi` workflow:
 
-| Feature              | Purpose                              |
-| -------------------- | ------------------------------------ |
-| Query hooks          | Fetch data with generated hooks      |
-| Lazy query hooks     | Trigger queries manually when needed |
-| Mutation hooks       | Handle writes with generated hooks   |
-| fetchBaseQuery       | Ready-to-use HTTP baseQuery built on fetch |
-| Cache utils          | Read and patch cached data manually  |
-| Stale time support   | Reuse cached data before refetching  |
-| Keep unused data for | Control cache lifetime after unmount |
+```txt
+define endpoints -> get typed hooks -> read/write cache -> refetch when stale
+```
 
-## 🎯 Why use it?
+Use it when you want:
 
-This package is specified for projects with no Redux. 
+| You need | You get |
+| --- | --- |
+| Generated React hooks | `useGetPostQuery`, `useLazyGetPostQuery`, `useUpdatePostMutation` |
+| A small HTTP layer | `fetchBaseQuery`, built on native `fetch` |
+| Cache reads and patches | `getQueryData`, `setQueryData`, `updateQueryData` |
+| Stale data handling | `staleTime`, `keepUnusedDataFor`, `refetchOnMount` |
+| Manual orchestration | `api.endpoints.*.initiate`, `select`, `subscribe` |
+| Store-based usage | `createController` from the controller subpath |
 
-It gives you a RTKQ-similar API model and developer experience, while staying smaller, simpler and focused on the most common data-fetching needs.
+## Install
 
-Do whatever you want and however you want with:
-* generated hooks
-* predictable cache behavior
-* simple manual cache updates
-* a focused API without a larger state layer
-* a built-in `fetchBaseQuery` for managing your HTTP requests
-
-## 📦 Requirements
-* Node.js 18 or higher
-* React 16.8 or higher
-
-## 🔥 Install
 ```bash
 npm i @alistt69/create-api
 ```
 
-## ⚡ Quick example
-```typescript jsx
-import { createApi, fetchBaseQuery } from '@alistt69/create-api';
+Requirements:
 
-const api = createApi({
-    baseQuery: fetchBaseQuery({
-        baseUrl: 'https://example.com/api',
-    }),
+| Runtime | Version |
+| --- | --- |
+| Node.js | `>=18` |
+| React | `>=16.8` |
 
-    endpoints: (builder) => ({
-        getPost: builder.query({
-            query: (id) => ({
-                url: `/posts/${id}`,
-            }),
-        }),
+## Quick Start
 
-        updatePost: builder.mutation({
-            query: ({ id, title }) => ({
-                url: `/posts/${id}`,
-                method: 'PATCH',
-                body: { title },
-            }),
-        }),
-    }),
-});
-```
-
-## 🛠️ Usage
-```typescript jsx
-function Post() {
-  const { data, isLoading } = api.useGetPostQuery('1');
-  const [updatePost] = api.useUpdatePostMutation();
-
-  if (isLoading) return <div>Loading...</div>;
-
-  return (
-    <button onClick={() => updatePost({ id: '1', title: 'Updated' })}>
-      {data?.title}
-    </button>
-  );
-}
-```
-
-## 🌐 fetchBaseQuery
-
-`fetchBaseQuery` is a small ready-to-use `baseQuery` built on top of the native `fetch` API.
-
-It supports:
-- `baseUrl`
-- `params`
-- `headers`
-- `prepareHeaders`
-- `timeout`
-- `responseHandler`
-- `validateStatus`
-- `fetchFn`
-
-### Example
+Create an API once:
 
 ```tsx
 import { createApi, fetchBaseQuery } from '@alistt69/create-api';
 
 const api = createApi({
-    baseQuery: fetchBaseQuery({
-        baseUrl: 'https://example.com/api',
-        prepareHeaders: (headers) => {
-            headers.set('authorization', 'Bearer token');
-            return headers;
-        },
+  baseQuery: fetchBaseQuery({
+    baseUrl: 'https://example.com/api',
+  }),
+
+  endpoints: (builder) => ({
+    getPost: builder.query({
+      query: (id: string) => ({
+        url: `/posts/${id}`,
+      }),
     }),
-    endpoints: (builder) => ({
-        getTickets: builder.query({
-            query: ({ page }) => ({
-                url: '/tickets',
-                params: { page },
-            }),
-        }),
+
+    updatePost: builder.mutation({
+      query: ({ id, title }: { id: string; title: string }) => ({
+        url: `/posts/${id}`,
+        method: 'PATCH',
+        body: { title },
+      }),
     }),
+  }),
 });
 ```
 
-### Blob / custom response handling
-```javascript
-downloadFile: builder.query({
-    query: () => ({
-        url: '/report',
-        responseHandler: (response) => response.blob(),
-    }),
-}),
+Then use the generated hooks:
+
+```tsx
+function Post() {
+  const { data, isLoading, refetch } = api.useGetPostQuery('1');
+  const [updatePost, updateState] = api.useUpdatePostMutation();
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <section>
+      <h2>{data?.title}</h2>
+
+      <button
+        disabled={updateState.isLoading}
+        onClick={() => updatePost({ id: '1', title: 'Updated' })}
+      >
+        Update
+      </button>
+
+      <button onClick={() => refetch()}>
+        Refetch
+      </button>
+    </section>
+  );
+}
 ```
 
-## ⚙️ Cache utils
-``` typescript
+## The Shape
+
+The package is intentionally small, but the surface area covers the core
+data-fetching loop.
+
+### Query hooks
+
+```tsx
+const result = api.useGetPostQuery('1', {
+  enabled: true,
+  refetchOnMount: true,
+});
+```
+
+Query state includes:
+
+| Field | Meaning |
+| --- | --- |
+| `data` | Last successful value |
+| `error` | Last failed value |
+| `status` | `uninitialized`, `pending`, `fulfilled` or `rejected` |
+| `isLoading` | First request is in progress |
+| `isFetching` | Any request is in progress, including background refetch |
+| `isSuccess` | Last known state is successful |
+| `isError` | Last known state is failed |
+| `fulfilledAt` | Timestamp of the last fulfilled request |
+| `requestId` | Active or last request id |
+
+### Lazy query hooks
+
+```tsx
+const [loadPost, post] = api.useLazyGetPostQuery();
+
+await loadPost('1');
+
+post.refetch();
+```
+
+Lazy queries are useful when the request should start from a user action,
+a modal opening, a route transition or another explicit event.
+
+### Mutation hooks
+
+```tsx
+const [updatePost, updateState] = api.useUpdatePostMutation();
+
+await updatePost({ id: '1', title: 'Updated' });
+
+updateState.reset();
+```
+
+Mutation state tracks the latest trigger. This keeps UI behavior predictable
+when several mutation calls overlap.
+
+## `fetchBaseQuery`
+
+`fetchBaseQuery` is a ready-to-use `baseQuery` built on top of native `fetch`.
+It handles URLs, params, JSON bodies, headers, timeouts and response parsing.
+
+```tsx
+import { createApi, fetchBaseQuery } from '@alistt69/create-api';
+
+const api = createApi({
+  baseQuery: fetchBaseQuery({
+    baseUrl: 'https://example.com/api',
+    timeout: 10_000,
+    prepareHeaders: (headers) => {
+      headers.set('authorization', 'Bearer token');
+      return headers;
+    },
+  }),
+
+  endpoints: (builder) => ({
+    getTickets: builder.query({
+      query: ({ page }: { page: number }) => ({
+        url: '/tickets',
+        params: { page },
+      }),
+    }),
+  }),
+});
+```
+
+Supported options:
+
+| Option | Where | Purpose |
+| --- | --- | --- |
+| `baseUrl` | base query | Prefix all request URLs |
+| `headers` | request | Add request-specific headers |
+| `prepareHeaders` | base query | Modify headers before every request |
+| `params` | request | Append query params |
+| `paramsSerializer` | base query | Customize query string serialization |
+| `body` | request | Send JSON, `FormData`, `Blob`, `URLSearchParams` or another fetch body |
+| `timeout` | both | Abort slow requests |
+| `responseHandler` | both | Parse as `json`, `text`, `content-type` or custom handler |
+| `validateStatus` | both | Decide whether a response is success |
+| `fetchFn` | base query | Use a custom fetch implementation |
+
+Custom response handling:
+
+```tsx
+downloadReport: builder.query({
+  query: () => ({
+    url: '/report',
+    responseHandler: (response) => response.blob(),
+  }),
+});
+```
+
+## Cache
+
+Queries are cached by endpoint name and serialized argument.
+
+```tsx
+const api = createApi({
+  baseQuery,
+  endpoints: (builder) => ({
+    getTicketById: builder.query({
+      query: (id: string) => ({ url: `/tickets/${id}` }),
+      serializeArgs: (id) => id,
+      staleTime: 2_000,
+      keepUnusedDataFor: 10_000,
+    }),
+  }),
+});
+```
+
+Cache controls:
+
+| Option | Behavior |
+| --- | --- |
+| `serializeArgs` | Builds the cache key for an endpoint argument |
+| `staleTime` | Keeps fulfilled data fresh for automatic mount behavior |
+| `keepUnusedDataFor` | Keeps unused cache alive after the last subscriber leaves |
+| `refetchOnMount` | Controls whether cached data may refetch on mount |
+| `enabled` | Disables automatic query execution while keeping manual `refetch` available |
+
+Manual cache updates:
+
+```tsx
 api.util.getQueryData('getPost', '1');
-api.util.setQueryData('getPost', '1', { id: '1', title: 'Local title' });
+
+api.util.setQueryData('getPost', '1', {
+  id: '1',
+  title: 'Local title',
+});
+
 api.util.updateQueryData('getPost', '1', (prev) => ({
-    ...prev,
-    title: 'Patched title',
+  ...prev,
+  title: 'Patched title',
 }));
 ```
 
-## 🧩 Imperative endpoints
+### Invalidation
 
-Each endpoint also exposes a small imperative API:
+Use endpoint-level invalidation for broad refetching:
 
-```typescript
-// query
+```tsx
+editTicket: builder.mutation({
+  query: ({ id, title }) => ({
+    url: `/tickets/${id}`,
+    method: 'PATCH',
+    body: { title },
+  }),
+  invalidates: ['getTickets'],
+});
+```
+
+Use tag invalidation when you want to target specific cached records:
+
+```tsx
+getTicketById: builder.query({
+  query: (id) => ({ url: `/tickets/${id}` }),
+  providesTags: (_result, id) => [`Ticket/${id}`],
+}),
+
+editTicket: builder.mutation({
+  query: ({ id, title }) => ({
+    url: `/tickets/${id}`,
+    method: 'PATCH',
+    body: { title },
+  }),
+  invalidatesTags: (_result, arg) => [`Ticket/${arg.id}`],
+});
+```
+
+## Imperative API
+
+Every endpoint also exposes a small imperative API. It is useful when a query
+lifecycle should live outside React components.
+
+```tsx
 const request = api.endpoints.getPost.initiate('1');
 
 const data = await request.unwrap();
 
-request.refetch();
+await request.refetch();
+
 request.unsubscribe();
 request.abort();
+```
 
-// mutation
+You can also inspect query state directly:
+
+```tsx
 const state = api.endpoints.getPost.select('1');
+```
 
-const mutation = api.endpoints.editPost.initiate({
-    id: '1',
-    title: 'Updated',
+And trigger mutations:
+
+```tsx
+const mutation = api.endpoints.updatePost.initiate({
+  id: '1',
+  title: 'Updated',
 });
 
 await mutation.unwrap();
+
 mutation.abort();
-
 ```
-This is useful when query lifecycle should live outside React components, for example in MobX stores or other controller-style state layers.
 
-## ⛓️‍💥 Controller
-For store-based usage you can import a small controller helper from the controller subpath:
-```typescript
+## Controller
+
+For store-based usage, import `createController` from the controller subpath:
+
+```tsx
 import { createController } from '@alistt69/create-api/controller';
 
 class TicketStore {
-    private ticket = createController(api.endpoints.getTicketById);
-    private editTicket = createController(api.endpoints.editTicket);
+  private ticket = createController(api.endpoints.getTicketById);
+  private editTicket = createController(api.endpoints.editTicket);
 
-    load(id: string) {
-        return this.ticket.run(id);
-    }
+  load(id: string) {
+    return this.ticket.run(id);
+  }
 
-    save(id: string, title: string) {
-        return this.editTicket.run({ id, title });
-    }
+  save(id: string, title: string) {
+    return this.editTicket.run({ id, title });
+  }
 
-    get ticketData() {
-        return this.ticket.state.data;
-    }
+  get ticketData() {
+    return this.ticket.state.data;
+  }
 
-    get isLoadingTicket() {
-        return this.ticket.state.isLoading;
-    }
+  get isLoadingTicket() {
+    return this.ticket.state.isLoading;
+  }
 
-    get isSavingTicket() {
-        return this.editTicket.state.isLoading;
-    }
+  get isSavingTicket() {
+    return this.editTicket.state.isLoading;
+  }
 
-    destroy() {
-        this.ticket.dispose();
-        this.editTicket.dispose();
-    }
+  destroy() {
+    this.ticket.dispose();
+    this.editTicket.dispose();
+  }
 }
 ```
-The controller keeps endpoint state outside React, subscribes to cache updates, and releases its subscription with dispose().
 
-## 📄 License
+The controller keeps endpoint state outside React, subscribes to cache updates,
+and releases its subscription with `dispose()`.
 
-MIT — free and open for everyone.
+## Demo
 
-_See [LICENSE](./LICENSE)._
+[Live demo](https://create-api-demo.vercel.app/)
+
+Sandbox is coming soon.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
