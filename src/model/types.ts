@@ -1,10 +1,15 @@
-import { BaseQueryArgs } from '../lib/createApi.js';
+import { type BaseQueryArgs } from '../lib/createApi.js';
 
 export type RequiredWithUndefined<T> = {
     [K in keyof Required<T>]: T[K] extends undefined ? T[K] : T[K];
 };
 
 export type EndpointType = 'query' | 'mutation';
+
+export type TagDescription = string | {
+    type: string;
+    id?: string | number;
+};
 
 export type HookName<K extends string, T extends EndpointType, L extends string = ''> = `use${L}${Capitalize<K>}${Capitalize<T>}`;
 
@@ -17,10 +22,61 @@ export interface CreateApiUtil {
     getQueryData: <R>(endpointName: string, arg: unknown) => R | undefined;
     setQueryData: <R>(endpointName: string, arg: unknown, data: R) => void;
     updateQueryData: <R>(endpointName: string, arg: unknown, updater: (prevData: R | undefined) => R) => R;
+    invalidateTags: (tags: TagDescription[]) => Promise<unknown>[];
 }
 
-export type BaseQueryResult<D = unknown, E = unknown, M = unknown>
-    = | {
+export interface MutationInitiateResult<R, A> {
+    requestId: string;
+    arg: A;
+    promise: Promise<R>;
+    unwrap: () => Promise<R>;
+    abort: () => void;
+}
+
+export interface QueryInitiateResult<R, A> {
+    requestId: string;
+    arg: A;
+    promise: Promise<R>;
+    unwrap: () => Promise<R>;
+    abort: () => void;
+    unsubscribe: () => void;
+    refetch: () => Promise<R>;
+}
+
+export interface QueryController<R, A> {
+    readonly state: InferQueryState<R>;
+    run: (arg: A) => Promise<R>;
+    refetch: () => Promise<R> | undefined;
+    abort: () => void;
+    dispose: () => void;
+}
+
+export type QueryStateListener = () => void;
+
+export interface MutationController<R, A> {
+    readonly state: InferMutationState<R>;
+    run: (arg: A) => Promise<R>;
+    abort: () => void;
+    reset: () => void;
+    dispose: () => void;
+}
+
+export interface ApiEndpointMutation<R, A> {
+    name: string;
+    type: 'mutation';
+    initiate: (arg: A) => MutationInitiateResult<R, A>;
+}
+
+export interface ApiEndpointQuery<R, A> {
+    name: string;
+    type: 'query';
+    select: (arg: A) => InferQueryState<R>;
+    initiate: (arg: A) => QueryInitiateResult<R, A>;
+    subscribe: (arg: A, listener: QueryStateListener) => () => void;
+}
+
+export type BaseQueryResult<D = unknown, E = unknown, M = unknown> = (
+    | {
         data: D;
         error?: undefined;
         meta?: M;
@@ -29,7 +85,8 @@ export type BaseQueryResult<D = unknown, E = unknown, M = unknown>
         error: E;
         data?: undefined;
         meta?: M;
-    };
+    }
+);
 
 export type BaseQueryFn<D = unknown, E = unknown, M = unknown, A = BaseQueryArgs> = (
     args: A,
@@ -45,6 +102,13 @@ export type CreateApiResult<T extends Record<string, GeneralDefinition<unknown, 
         ? LazyQueryHook<R, A>
         : never;
 } & {
+    endpoints: {
+        [K in keyof T]: T[K] extends QueryBuilderDefinition<infer R, infer A, infer _Raw>
+            ? ApiEndpointQuery<R, A>
+            : T[K] extends MutationBuilderDefinition<infer R, infer A, infer _Raw>
+                ? ApiEndpointMutation<R, A>
+                : never;
+    };
     util: CreateApiUtil;
 };
 
@@ -54,7 +118,7 @@ export type InferHook<Def> = Def extends QueryBuilderDefinition<infer R, infer A
         ? MutationHook<R, A>
         : never;
 
-export type QueryTagsResolver<R, A> = (result: R, arg: A) => string[];
+export type QueryTagsResolver<R, A> = (result: R, arg: A) => TagDescription[];
 
 export interface QueryBuilderDefinitionBase<R, A> {
     /**
@@ -143,7 +207,7 @@ export type QueryDefinitionInput<R, A, Raw = R> = QueryBuilderDefinitionBase<R, 
         : QueryBuilderDefinitionTransform<R, A, Raw>
     );
 
-export type MutationTagsResolver<R, A> = (result: R, arg: A) => string[];
+export type MutationTagsResolver<R, A> = (result: R, arg: A) => TagDescription[];
 
 export interface MutationBuilderDefinitionBase<R, A> {
     /**
@@ -210,6 +274,7 @@ export type MutationDefinitionInput<R, A, Raw = R> = MutationBuilderDefinitionBa
         : MutationBuilderDefinitionTransform<R, A, Raw>
     );
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type GeneralDefinition<R = any, A = any, Raw = R> = (
     MutationBuilderDefinition<R, A, Raw> | QueryBuilderDefinition<R, A, Raw>
 );
@@ -220,12 +285,19 @@ export interface InferMutationState<R> {
     error?: unknown;
 }
 
+export type QueryStatus = 'uninitialized' | 'pending' | 'fulfilled' | 'rejected';
+
 export interface InferQueryState<R> {
     data?: R;
+    error?: unknown;
+    status: QueryStatus;
+    isUninitialized: boolean;
     isLoading: boolean;
     isFetching: boolean;
-    error?: unknown;
+    isSuccess: boolean;
+    isError: boolean;
     fulfilledAt?: number;
+    requestId?: string;
 }
 
 export interface QueryManagers<R> {

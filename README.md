@@ -166,6 +166,71 @@ api.util.updateQueryData('getPost', '1', (prev) => ({
 }));
 ```
 
+## 🧩 Imperative endpoints
+
+Each endpoint also exposes a small imperative API:
+
+```typescript
+// query
+const request = api.endpoints.getPost.initiate('1');
+
+const data = await request.unwrap();
+
+request.refetch();
+request.unsubscribe();
+request.abort();
+
+// mutation
+const state = api.endpoints.getPost.select('1');
+
+const mutation = api.endpoints.editPost.initiate({
+    id: '1',
+    title: 'Updated',
+});
+
+await mutation.unwrap();
+mutation.abort();
+
+```
+This is useful when query lifecycle should live outside React components, for example in MobX stores or other controller-style state layers.
+
+## ⛓️‍💥 Controller
+For store-based usage you can import a small controller helper from the controller subpath:
+```typescript
+import { createController } from '@alistt69/create-api/controller';
+
+class TicketStore {
+    private ticket = createController(api.endpoints.getTicketById);
+    private editTicket = createController(api.endpoints.editTicket);
+
+    load(id: string) {
+        return this.ticket.run(id);
+    }
+
+    save(id: string, title: string) {
+        return this.editTicket.run({ id, title });
+    }
+
+    get ticketData() {
+        return this.ticket.state.data;
+    }
+
+    get isLoadingTicket() {
+        return this.ticket.state.isLoading;
+    }
+
+    get isSavingTicket() {
+        return this.editTicket.state.isLoading;
+    }
+
+    destroy() {
+        this.ticket.dispose();
+        this.editTicket.dispose();
+    }
+}
+```
+The controller keeps endpoint state outside React, subscribes to cache updates, and releases its subscription with dispose().
+
 ## 📄 License
 
 MIT — free and open for everyone.

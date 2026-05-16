@@ -1,4 +1,4 @@
-import { MutationBuilderDefinition, MutationDefinitionInput } from './types.js';
+import { type MutationBuilderDefinition, type MutationDefinitionInput } from './types.js';
 
 type MutationSignature<R, A, Raw = R> = Omit<MutationDefinitionInput<R, A, Raw>, 'type'>;
 

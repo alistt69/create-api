@@ -1,4 +1,4 @@
-import { QueryBuilderDefinition, QueryDefinitionInput } from './types.js';
+import { type QueryBuilderDefinition, type QueryDefinitionInput } from './types.js';
 
 type QuerySignature<R, A, Raw = R> = Omit<QueryDefinitionInput<R, A, Raw>, 'type'>;
 

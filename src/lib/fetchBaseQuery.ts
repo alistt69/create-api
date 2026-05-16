@@ -1,9 +1,9 @@
 import {
-    BaseQueryFn,
-    FetchBaseQueryArgs,
-    FetchBaseQueryError,
-    FetchBaseQueryMeta,
-    FetchBaseQueryOptions,
+    type BaseQueryFn,
+    type FetchBaseQueryArgs,
+    type FetchBaseQueryError,
+    type FetchBaseQueryMeta,
+    type FetchBaseQueryOptions,
 } from '../model/types.js';
 
 function joinUrls(baseUrl: string | undefined, url: string): string {

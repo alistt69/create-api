@@ -6,32 +6,20 @@ import {
     clearQueryRunner,
     subscribeToQuery,
     registerQueryKey,
-    setInFlightQuery,
-    getInFlightQuery,
-    updateQueryState,
-    setTagsForQueryKey,
-    clearInFlightQuery,
-    setQueryAbortController,
-    clearQueryAbortController,
 } from '../model/queryStore.js';
-import { BaseQueryFn, QueryBuilderDefinition, QueryHookOptions } from '../model/types.js';
+import { type QueryHookOptions } from '../model/types.js';
+import { runQuery, type RunQueryProps } from './runQuery.js';
 
-type MakeQueryHookProps<R, A, Raw = R> = {
-    endpointName: string;
-    baseQuery: BaseQueryFn<Raw>;
-} & Omit<QueryBuilderDefinition<R, A, Raw>, 'type'>;
+export function makeQueryHook<R, A, Raw = R>(
+    props: RunQueryProps<R, A, Raw>,
+) {
+    const {
+        endpointName,
+        serializeArgs,
+        staleTime = 0,
+        keepUnusedDataFor = 0,
+    } = props;
 
-export function makeQueryHook<R, A, Raw = R>({
-    query,
-    baseQuery,
-    endpointName,
-    providesTags,
-    serializeArgs,
-    staleTime = 0,
-    transformResponse,
-    keepUnusedDataFor = 0,
-    transformErrorResponse,
-}: MakeQueryHookProps<R, A, Raw>) {
     return function useGeneratedQuery(arg: A, options?: QueryHookOptions) {
         const enabled = options?.enabled ?? true;
         const refetchOnMount = options?.refetchOnMount ?? true;
@@ -49,97 +37,8 @@ export function makeQueryHook<R, A, Raw = R>({
         );
 
         const run = useCallback((requestArg: A) => {
-            const existingPromise = getInFlightQuery<R>(key);
-
-            if (existingPromise) {
-                return existingPromise;
-            }
-
-            const controller = new AbortController();
-            setQueryAbortController(key, controller);
-
-            let promise!: Promise<R>;
-
-            // eslint-disable-next-line prefer-const
-            promise = (async () => {
-                updateQueryState(key, (prevState) => ({
-                    ...prevState,
-                    error: undefined,
-                    ...(prevState.data !== undefined
-                        ? { isFetching: true, isLoading: false }
-                        : { isLoading: true, isFetching: false }),
-                }));
-
-                try {
-                    const request = query(requestArg);
-                    const result = await baseQuery({
-                        ...request,
-                        signal: controller.signal,
-                    });
-
-                    if ('error' in result) {
-                        const transformedError = transformErrorResponse
-                            ? transformErrorResponse(result.error, requestArg)
-                            : result.error;
-
-                        throw transformedError;
-                    }
-
-                    const raw = result.data;
-                    const data = transformResponse ? transformResponse(raw, requestArg) : raw as unknown as R;
-
-                    if (!controller.signal.aborted) {
-                        updateQueryState(key, (prevState) => ({
-                            ...prevState,
-                            data,
-                            error: undefined,
-                            fulfilledAt: Date.now(),
-                        }));
-
-                        if (providesTags) {
-                            setTagsForQueryKey(key, providesTags(data, requestArg));
-                        }
-                    }
-
-                    return data;
-                }
-                catch (error) {
-                    if (controller.signal.aborted) {
-                        throw error;
-                    }
-
-                    updateQueryState(key, (prevState) => ({
-                        ...prevState,
-                        error,
-                    }));
-
-                    throw error;
-                }
-                finally {
-                    if (!controller.signal.aborted) {
-                        updateQueryState(key, (prevState) => ({
-                            ...prevState,
-                            isLoading: false,
-                            isFetching: false,
-                        }));
-                    }
-
-                    clearInFlightQuery(key, promise);
-                    clearQueryAbortController(key, controller);
-                }
-            })();
-
-            setInFlightQuery(key, promise);
-
-            return promise;
-        }, [
-            key,
-            query,
-            baseQuery,
-            providesTags,
-            transformResponse,
-            transformErrorResponse,
-        ]);
+            return runQuery(props, requestArg, { key });
+        }, [key]);
 
         const refetch = useCallback(() => {
             return run(argRef.current);
@@ -150,10 +49,11 @@ export function makeQueryHook<R, A, Raw = R>({
 
             if (enabled) {
                 setQueryRunner(key, () => run(arg));
-            } else {
+            }
+            else {
                 clearQueryRunner(key);
             }
-        }, [endpointName, key, run, arg, enabled]);
+        }, [key, run, enabled]);
 
         useEffect(() => {
             if (!enabled) {
@@ -176,7 +76,7 @@ export function makeQueryHook<R, A, Raw = R>({
             if (!isFresh) {
                 void run(arg).catch(() => undefined);
             }
-        }, [enabled, key, run, staleTime, refetchOnMount]);
+        }, [enabled, key, run, refetchOnMount]);
 
         return { ...state, refetch };
     };

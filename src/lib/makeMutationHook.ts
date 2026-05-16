@@ -1,10 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {
-    getQueryKeysByTag,
-    refetchQueryByKey,
-    refetchQueriesByEndpoint,
-} from '../model/queryStore.js';
-import { BaseQueryFn, InferMutationState, MutationBuilderDefinition } from '../model/types.js';
+import { invalidateTags, refetchQueriesByEndpoint } from '../model/queryStore.js';
+import { type BaseQueryFn, type InferMutationState, type MutationBuilderDefinition } from '../model/types.js';
 
 type MakeMutationHookProps<R, A, Raw = R> = {
     baseQuery: BaseQueryFn<Raw>;
@@ -71,12 +67,7 @@ export function makeMutationHook<R, A, Raw = R>({
                 });
 
                 if (invalidatesTags) {
-                    const tags = invalidatesTags(data, arg);
-                    const keys = new Set(tags.flatMap((tag) => getQueryKeysByTag(tag)));
-
-                    keys.forEach((key) => {
-                        refetchQueryByKey(key);
-                    });
+                    invalidateTags(invalidatesTags(data, arg));
                 }
 
                 return data;

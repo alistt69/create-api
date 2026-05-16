@@ -16,7 +16,8 @@ import {
     queryAbortControllers,
     querySubscriptionsCount,
 } from '../model/queryStore.js';
-import { BaseQueryArgs, createApi } from './createApi.js';
+import { type BaseQueryArgs, createApi } from './createApi.js';
+import { createController } from '../controller.js';
 import { fetchBaseQuery } from './fetchBaseQuery.js';
 import type { BaseQueryResult } from '../model/types.js';
 
@@ -451,6 +452,567 @@ describe('createApi core', () => {
         expect(mutation.result.current[1].data).toBeUndefined();
         expect(mutation.result.current[1].error).toBeUndefined();
         expect(mutation.result.current[1].isLoading).toBe(false);
+    });
+
+    it('selects uninitialized query state before cache entry exists', () => {
+        const { api } = setupApi();
+
+        const state = api.endpoints.getTicketById.select('2');
+
+        expect(state).toEqual({
+            data: undefined,
+            error: undefined,
+            status: 'uninitialized',
+            isUninitialized: true,
+            isLoading: false,
+            isFetching: false,
+            isSuccess: false,
+            isError: false,
+            fulfilledAt: undefined,
+            requestId: undefined,
+        });
+    });
+
+    it('selects fulfilled query state after manual cache write', () => {
+        const { api } = setupApi();
+
+        act(() => {
+            api.util.setQueryData<TicketDetailResponse>('getTicketById', '2', {
+                id: '2',
+                title: 'Selected Local',
+                callNo: 999,
+                servedAt: 'now',
+            });
+        });
+
+        const state = api.endpoints.getTicketById.select('2');
+
+        expect(state.data?.title).toBe('Selected Local');
+        expect(state.status).toBe('fulfilled');
+        expect(state.isUninitialized).toBe(false);
+        expect(state.isSuccess).toBe(true);
+        expect(state.isError).toBe(false);
+        expect(state.isLoading).toBe(false);
+        expect(state.isFetching).toBe(false);
+        expect(state.error).toBeUndefined();
+        expect(state.fulfilledAt).toEqual(expect.any(Number));
+    });
+
+    it('selects fulfilled query state after hook request succeeds', async () => {
+        const { api } = setupApi();
+
+        renderHook(() => api.useGetTicketByIdQuery('2'));
+
+        await advance(200);
+
+        const state = api.endpoints.getTicketById.select('2');
+
+        expect(state.data?.id).toBe('2');
+        expect(state.data?.title).toBe('Beta');
+        expect(state.status).toBe('fulfilled');
+        expect(state.isSuccess).toBe(true);
+        expect(state.isLoading).toBe(false);
+        expect(state.isFetching).toBe(false);
+        expect(state.error).toBeUndefined();
+    });
+
+    it('initiates query and exposes fulfilled state through select', async () => {
+        const { api } = setupApi();
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        await advance(200);
+
+        await expect(request.unwrap()).resolves.toMatchObject({
+            id: '2',
+            title: 'Beta',
+        });
+
+        const state = api.endpoints.getTicketById.select('2');
+
+        expect(state.data?.id).toBe('2');
+        expect(state.data?.title).toBe('Beta');
+        expect(state.status).toBe('fulfilled');
+        expect(state.isSuccess).toBe(true);
+        expect(state.requestId).toBe(request.requestId);
+
+        request.unsubscribe();
+    });
+
+    it('keeps initiated query cache until unsubscribe garbage collection finishes', async () => {
+        const { api } = setupApi();
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        await advance(200);
+
+        expect(api.endpoints.getTicketById.select('2').data?.id).toBe('2');
+
+        request.unsubscribe();
+
+        await advance(9999);
+
+        expect(api.endpoints.getTicketById.select('2').data?.id).toBe('2');
+
+        await advance(1);
+
+        expect(api.endpoints.getTicketById.select('2')).toEqual({
+            data: undefined,
+            error: undefined,
+            status: 'uninitialized',
+            isUninitialized: true,
+            isLoading: false,
+            isFetching: false,
+            isSuccess: false,
+            isError: false,
+            fulfilledAt: undefined,
+            requestId: undefined,
+        });
+    });
+
+    it('allows initiated query unsubscribe to be called more than once', async () => {
+        const { api } = setupApi();
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        await advance(200);
+
+        expect(api.endpoints.getTicketById.select('2').data?.id).toBe('2');
+
+        request.unsubscribe();
+        request.unsubscribe();
+
+        await advance(9999);
+
+        expect(api.endpoints.getTicketById.select('2').data?.id).toBe('2');
+
+        await advance(1);
+
+        expect(api.endpoints.getTicketById.select('2').isUninitialized).toBe(true);
+    });
+
+    it('refetches initiated query and updates cache state', async () => {
+        const { api, calls } = setupApi();
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        await advance(200);
+
+        expect(api.endpoints.getTicketById.select('2').data?.callNo).toBe(1);
+        expect(calls.detailCallsById.get('2')).toBe(1);
+
+        const refetchPromise = request.refetch();
+
+        await advance(200);
+
+        await expect(refetchPromise).resolves.toMatchObject({
+            id: '2',
+            callNo: 2,
+        });
+
+        const state = api.endpoints.getTicketById.select('2');
+
+        expect(state.data?.callNo).toBe(2);
+        expect(state.status).toBe('fulfilled');
+        expect(state.isSuccess).toBe(true);
+        expect(calls.detailCallsById.get('2')).toBe(2);
+
+        request.unsubscribe();
+    });
+
+    it('stores initiated query error and rejects unwrap', async () => {
+        const { api } = setupApi();
+
+        const request = api.endpoints.getTickets.initiate({ page: 13 });
+
+        const unwrapExpectation = expect(request.unwrap()).rejects.toEqual({
+            status: 400,
+            data: { message: 'Page 13 is forced to fail' },
+        });
+
+        await advance(1000);
+
+        await unwrapExpectation;
+
+        const state = api.endpoints.getTickets.select({ page: 13 });
+
+        expect(state.data).toBeUndefined();
+        expect(state.error).toEqual({
+            status: 400,
+            data: { message: 'Page 13 is forced to fail' },
+        });
+        expect(state.status).toBe('rejected');
+        expect(state.isError).toBe(true);
+        expect(state.isSuccess).toBe(false);
+        expect(state.requestId).toBe(request.requestId);
+
+        request.unsubscribe();
+    });
+
+    it('aborts initiated query and leaves rejected state', async () => {
+        const { api } = setupApi();
+
+        const request = api.endpoints.getTickets.initiate({ page: 1 });
+
+        const unwrapExpectation = expect(request.unwrap()).rejects.toMatchObject({
+            name: 'AbortError',
+        });
+
+        request.abort();
+
+        await unwrapExpectation;
+
+        const state = api.endpoints.getTickets.select({ page: 1 });
+
+        expect(state.status).toBe('rejected');
+        expect(state.isError).toBe(true);
+        expect(state.isLoading).toBe(false);
+        expect(state.isFetching).toBe(false);
+        expect(state.requestId).toBe(request.requestId);
+
+        request.unsubscribe();
+    });
+
+    it('exposes initiated query promise', async () => {
+        const { api } = setupApi();
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        await advance(200);
+
+        await expect(request.promise).resolves.toMatchObject({
+            id: '2',
+            title: 'Beta',
+        });
+
+        request.unsubscribe();
+    });
+
+    it('invalidates object tags through api util and refetches matching active query', async () => {
+        const { api, calls } = setupApi();
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        await advance(200);
+
+        expect(api.endpoints.getTicketById.select('2').data?.callNo).toBe(1);
+        expect(calls.detailCallsById.get('2')).toBe(1);
+
+        const refetches = api.util.invalidateTags([{ type: 'Ticket', id: '2' }]);
+
+        expect(refetches).toHaveLength(1);
+
+        await advance(200);
+        await Promise.all(refetches);
+
+        expect(api.endpoints.getTicketById.select('2').data?.callNo).toBe(2);
+        expect(calls.detailCallsById.get('2')).toBe(2);
+
+        request.unsubscribe();
+    });
+
+    it('invalidates string tags through api util', async () => {
+        const { api, calls } = setupApi();
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        await advance(200);
+
+        expect(calls.detailCallsById.get('2')).toBe(1);
+
+        const refetches = api.util.invalidateTags(['Ticket/2']);
+
+        expect(refetches).toHaveLength(1);
+
+        await advance(200);
+        await Promise.all(refetches);
+
+        expect(api.endpoints.getTicketById.select('2').data?.callNo).toBe(2);
+        expect(calls.detailCallsById.get('2')).toBe(2);
+
+        request.unsubscribe();
+    });
+
+    it('subscribes to endpoint query state changes', async () => {
+        const { api } = setupApi();
+
+        const listener = vi.fn();
+        const unsubscribe = api.endpoints.getTicketById.subscribe('2', listener);
+
+        const request = api.endpoints.getTicketById.initiate('2');
+
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        await advance(200);
+
+        expect(listener).toHaveBeenCalled();
+
+        const callsAfterFulfilled = listener.mock.calls.length;
+
+        unsubscribe();
+
+        act(() => {
+            api.util.setQueryData<TicketDetailResponse>('getTicketById', '2', {
+                id: '2',
+                title: 'After unsubscribe',
+                callNo: 999,
+                servedAt: 'now',
+            });
+        });
+
+        expect(listener).toHaveBeenCalledTimes(callsAfterFulfilled);
+
+        request.unsubscribe();
+    });
+
+    it('creates controller that runs query and exposes state', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.getTicketById);
+
+        expect(controller.state.isUninitialized).toBe(true);
+
+        const promise = controller.run('2');
+
+        expect(controller.state.status).toBe('pending');
+
+        await advance(200);
+
+        await expect(promise).resolves.toMatchObject({
+            id: '2',
+            title: 'Beta',
+        });
+
+        expect(controller.state.data?.id).toBe('2');
+        expect(controller.state.data?.title).toBe('Beta');
+        expect(controller.state.status).toBe('fulfilled');
+        expect(controller.state.isSuccess).toBe(true);
+
+        controller.dispose();
+
+        expect(controller.state.isUninitialized).toBe(true);
+    });
+
+    it('updates controller state after tag invalidation refetch', async () => {
+        const { api, calls } = setupApi();
+
+        const controller = createController(api.endpoints.getTicketById);
+
+        const promise = controller.run('2');
+
+        await advance(200);
+        await promise;
+
+        expect(controller.state.data?.callNo).toBe(1);
+        expect(calls.detailCallsById.get('2')).toBe(1);
+
+        const refetches = api.util.invalidateTags([{ type: 'Ticket', id: '2' }]);
+
+        await advance(200);
+        await Promise.all(refetches);
+
+        expect(controller.state.data?.callNo).toBe(2);
+        expect(calls.detailCallsById.get('2')).toBe(2);
+
+        controller.dispose();
+    });
+
+    it('stops updating controller state after dispose', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.getTicketById);
+
+        const promise = controller.run('2');
+
+        await advance(200);
+        await promise;
+
+        expect(controller.state.data?.title).toBe('Beta');
+
+        controller.dispose();
+
+        act(() => {
+            api.util.setQueryData<TicketDetailResponse>('getTicketById', '2', {
+                id: '2',
+                title: 'After dispose',
+                callNo: 999,
+                servedAt: 'now',
+            });
+        });
+
+        expect(controller.state.isUninitialized).toBe(true);
+        expect(controller.state.data).toBeUndefined();
+    });
+
+    it('initiates mutation imperatively', async () => {
+        const { api } = setupApi();
+
+        const request = api.endpoints.editTicket.initiate({
+            id: '2',
+            title: 'Updated from initiate',
+        });
+
+        await advance(200);
+
+        await expect(request.unwrap()).resolves.toMatchObject({
+            ok: true,
+            ticket: {
+                id: '2',
+                title: 'Updated from initiate',
+            },
+        });
+
+        expect(request.arg).toEqual({
+            id: '2',
+            title: 'Updated from initiate',
+        });
+        expect(request.requestId).toEqual(expect.any(String));
+    });
+
+    it('creates controller that runs mutation and exposes state', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.editTicket);
+
+        expect(controller.state.isLoading).toBe(false);
+        expect(controller.state.data).toBeUndefined();
+        expect(controller.state.error).toBeUndefined();
+
+        const promise = controller.run({
+            id: '2',
+            title: 'Updated from mutation controller',
+        });
+
+        expect(controller.state.isLoading).toBe(true);
+
+        await advance(200);
+
+        await expect(promise).resolves.toMatchObject({
+            ok: true,
+            ticket: {
+                id: '2',
+                title: 'Updated from mutation controller',
+            },
+        });
+
+        expect(controller.state.isLoading).toBe(false);
+        expect(controller.state.error).toBeUndefined();
+        expect(controller.state.data?.ticket.title).toBe('Updated from mutation controller');
+
+        controller.dispose();
+
+        expect(controller.state.isLoading).toBe(false);
+        expect(controller.state.data).toBeUndefined();
+        expect(controller.state.error).toBeUndefined();
+    });
+
+    it('keeps latest mutation controller state when older run resolves later', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.editTicket);
+
+        const firstPromise = controller.run({
+            id: '2',
+            title: 'Older mutation',
+            delayMs: 500,
+        });
+
+        const firstError = firstPromise.catch((error) => error);
+
+        const secondPromise = controller.run({
+            id: '2',
+            title: 'Latest mutation',
+            delayMs: 100,
+        });
+
+        await advance(100);
+
+        await expect(secondPromise).resolves.toMatchObject({
+            ticket: {
+                id: '2',
+                title: 'Latest mutation',
+            },
+        });
+
+        expect(controller.state.data?.ticket.title).toBe('Latest mutation');
+
+        await advance(400);
+
+        await expect(firstError).resolves.toBeDefined();
+
+        expect(controller.state.data?.ticket.title).toBe('Latest mutation');
+
+        controller.dispose();
+    });
+
+    it('stores mutation controller error when run fails', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.editTicket);
+
+        const promise = controller.run({
+            id: 'missing',
+            title: 'Nothing',
+        });
+
+        const errorPromise = promise.catch((error) => error);
+
+        expect(controller.state.isLoading).toBe(true);
+
+        await advance(200);
+
+        await expect(errorPromise).resolves.toEqual({
+            status: 404,
+            data: { message: 'Ticket missing not found' },
+        });
+
+        expect(controller.state.isLoading).toBe(false);
+        expect(controller.state.data).toBeUndefined();
+        expect(controller.state.error).toEqual({
+            status: 404,
+            data: { message: 'Ticket missing not found' },
+        });
+
+        controller.dispose();
+    });
+
+    it('refetches query controller after mutation controller invalidates matching tag', async () => {
+        const { api, calls } = setupApi();
+
+        const ticketController = createController(api.endpoints.getTicketById);
+        const editController = createController(api.endpoints.editTicket);
+
+        const queryPromise = ticketController.run('2');
+
+        await advance(200);
+        await queryPromise;
+
+        expect(ticketController.state.data?.title).toBe('Beta');
+        expect(ticketController.state.data?.callNo).toBe(1);
+        expect(calls.detailCallsById.get('2')).toBe(1);
+
+        const mutationPromise = editController.run({
+            id: '2',
+            title: 'Updated through mutation controller',
+        });
+
+        await advance(200);
+
+        await expect(mutationPromise).resolves.toMatchObject({
+            ticket: {
+                id: '2',
+                title: 'Updated through mutation controller',
+            },
+        });
+
+        await advance(200);
+
+        expect(ticketController.state.data?.title).toBe('Updated through mutation controller');
+        expect(ticketController.state.data?.callNo).toBe(2);
+        expect(calls.detailCallsById.get('2')).toBe(2);
+
+        editController.dispose();
+        ticketController.dispose();
     });
 
     it('supports util setQueryData and updateQueryData', async () => {

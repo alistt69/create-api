@@ -1,6 +1,21 @@
-import { InferQueryState, RequiredWithUndefined } from './types.js';
+import { type InferQueryState, type RequiredWithUndefined, type TagDescription } from './types.js';
 
 type QueryState = InferQueryState<unknown>;
+
+export function getInitialQueryState<R = unknown>(): RequiredWithUndefined<InferQueryState<R>> {
+    return {
+        data: undefined,
+        error: undefined,
+        status: 'uninitialized',
+        isUninitialized: true,
+        isLoading: false,
+        isFetching: false,
+        isSuccess: false,
+        isError: false,
+        fulfilledAt: undefined,
+        requestId: undefined,
+    };
+}
 
 export const querySubscriptionsCount = new Map<string, number>();
 
@@ -42,10 +57,32 @@ export function getQueryKeyByEndpointArg(endpointName: string, arg: unknown): st
     return `${endpointName}::${serializedArg}`;
 }
 
+export function normalizeTag(tag: TagDescription): string {
+    if (typeof tag === 'string') {
+        return tag;
+    }
+
+    if (tag.id === undefined) {
+        return tag.type;
+    }
+
+    return `${tag.type}/${tag.id}`;
+}
+
+export function normalizeTags(tags: TagDescription[]): string[] {
+    return tags.map(normalizeTag);
+}
+
 export function getQueryData<R>(endpointName: string, arg: unknown): R | undefined {
     const key = getQueryKeyByEndpointArg(endpointName, arg);
 
     return getQueryState(key)?.data as R | undefined;
+}
+
+export function selectQueryState<R>(endpointName: string, arg: unknown): InferQueryState<R> {
+    const key = getQueryKeyByEndpointArg(endpointName, arg);
+
+    return (getQueryState(key) as InferQueryState<R> | undefined) ?? getInitialQueryState<R>();
 }
 
 export function setQueryData<R>(endpointName: string, arg: unknown, data: R) {
@@ -55,8 +92,12 @@ export function setQueryData<R>(endpointName: string, arg: unknown, data: R) {
         ...prevState,
         data,
         error: undefined,
+        status: 'fulfilled',
+        isUninitialized: false,
         isLoading: false,
         isFetching: false,
+        isSuccess: true,
+        isError: false,
         fulfilledAt: Date.now(),
     }));
 
@@ -116,13 +157,7 @@ export function getQueryState(key: string): QueryState | undefined {
 
 export function initQueryState(key: string): QueryState {
     if (!queryStore.has(key)) {
-        const newValue: RequiredWithUndefined<QueryState> = {
-            data: undefined,
-            isLoading: false,
-            isFetching: false,
-            error: undefined,
-            fulfilledAt: undefined,
-        };
+        const newValue: RequiredWithUndefined<QueryState> = getInitialQueryState();
 
         queryStore.set(key, newValue);
     }
@@ -261,10 +296,10 @@ export function clearTagsForQueryKey(key: string) {
     queryTagsByKey.delete(key);
 }
 
-export function setTagsForQueryKey(key: string, tags: string[]) {
+export function setTagsForQueryKey(key: string, tags: TagDescription[]) {
     clearTagsForQueryKey(key);
 
-    const uniqueTags = new Set(tags);
+    const uniqueTags = new Set(normalizeTags(tags));
     queryTagsByKey.set(key, uniqueTags);
 
     uniqueTags.forEach((tag) => {
@@ -280,11 +315,21 @@ export function getQueryKeysByTag(tag: string): string[] {
     return Array.from(queryKeysByTag.get(tag) ?? []);
 }
 
-export const queryTagResolvers = new Map<string, (data: unknown, arg: unknown) => string[]>();
+export function invalidateTags(tags: TagDescription[]): Promise<unknown>[] {
+    const keys = new Set(
+        normalizeTags(tags).flatMap((tag) => getQueryKeysByTag(tag)),
+    );
+
+    return Array.from(keys)
+        .map((key) => refetchQueryByKey(key))
+        .filter((value): value is Promise<unknown> => value !== undefined);
+}
+
+export const queryTagResolvers = new Map<string, (data: unknown, arg: unknown) => TagDescription[]>();
 
 export function setQueryTagResolver(
     endpointName: string,
-    resolver?: (data: unknown, arg: unknown) => string[],
+    resolver?: (data: unknown, arg: unknown) => TagDescription[],
 ) {
     if (!resolver) {
         queryTagResolvers.delete(endpointName);
@@ -294,7 +339,7 @@ export function setQueryTagResolver(
     queryTagResolvers.set(endpointName, resolver);
 }
 
-export function getQueryTagsForData(endpointName: string, data: unknown, arg: unknown): string[] {
+export function getQueryTagsForData(endpointName: string, data: unknown, arg: unknown): TagDescription[] {
     const resolver = queryTagResolvers.get(endpointName);
 
     if (!resolver) {
@@ -317,8 +362,12 @@ export function updateQueryData<R>(
         ...prevState,
         data: nextData,
         error: undefined,
+        status: 'fulfilled',
+        isUninitialized: false,
         isLoading: false,
         isFetching: false,
+        isSuccess: true,
+        isError: false,
         fulfilledAt: Date.now(),
     }));
 

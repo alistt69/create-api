@@ -2,17 +2,23 @@ import { mutation } from '../model/mutation.js';
 import { query } from '../model/query.js';
 import {
     getQueryData,
+    getQueryKeyByEndpointArg,
+    invalidateTags,
+    selectQueryState,
     setQueryData,
-    updateQueryData,
-    setQueryTagResolver,
     setQueryKeySerializer,
+    setQueryTagResolver,
+    subscribeToQuery,
+    updateQueryData,
 } from '../model/queryStore.js';
-import { BaseQueryFn, CreateApiResult, CreateApiUtil, GeneralDefinition } from '../model/types.js';
+import { type BaseQueryFn, type CreateApiResult, type CreateApiUtil, type GeneralDefinition } from '../model/types.js';
 import { getHookName } from './getHookName.js';
+import { initiateQuery } from './initiateQuery.js';
 import { makeLazyQueryHook } from './makeLazyQueryHook.js';
 import { makeMutationHook } from './makeMutationHook.js';
 import { makeQueryHook } from './makeQueryHook.js';
 import { typedObjectKeys } from './typedObjectKeys.js';
+import { initiateMutation } from './initiateMutation.js';
 
 export interface BaseQueryArgs {
     url: string;
@@ -35,6 +41,7 @@ export function createApi<T extends Record<string, GeneralDefinition>>({
 
     const keys = typedObjectKeys(transformedEndpoints);
     const apiResult: Record<string, unknown> = {};
+    const localEndpoints: Record<string, unknown> = {};
 
     keys.forEach((endpointName) => {
         const definition = transformedEndpoints[endpointName];
@@ -44,6 +51,28 @@ export function createApi<T extends Record<string, GeneralDefinition>>({
             endpointName,
             ...definition,
         };
+
+        if (definition.type === 'query') {
+            localEndpoints[endpointName] = {
+                name: endpointName,
+                type: definition.type,
+                select: (arg: unknown) => selectQueryState(endpointName, arg),
+                initiate: (arg: unknown) => initiateQuery(makeHookProps, arg),
+                subscribe: (arg: unknown, listener: () => void) => subscribeToQuery(
+                    getQueryKeyByEndpointArg(endpointName, arg),
+                    listener,
+                    definition.keepUnusedDataFor ?? 0,
+                ),
+            };
+        }
+
+        if (definition.type === 'mutation') {
+            localEndpoints[endpointName] = {
+                name: endpointName,
+                type: definition.type,
+                initiate: (arg: unknown) => initiateMutation(makeHookProps, arg),
+            };
+        }
 
         if (definition.type === 'query') {
             setQueryKeySerializer(
@@ -75,7 +104,8 @@ export function createApi<T extends Record<string, GeneralDefinition>>({
         getQueryData,
         setQueryData,
         updateQueryData,
+        invalidateTags,
     };
 
-    return { ...apiResult, util } as CreateApiResult<T>;
+    return { ...apiResult, endpoints: localEndpoints, util } as CreateApiResult<T>;
 }

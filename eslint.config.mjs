@@ -59,6 +59,7 @@ export default [
             '@stylistic/no-extra-parens': 'off',
             '@stylistic/jsx-indent-props': 'off',
             '@stylistic/multiline-ternary': 'off',
+            '@stylistic/indent-binary-ops': 'off',
 
             // === Whitespace ===
             'no-trailing-spaces': ['warn', { skipBlankLines: false }],
@@ -124,6 +125,10 @@ export default [
 
             // === General ===
             '@typescript-eslint/no-unused-vars': 'off', // Handled by unused-imports
+            '@typescript-eslint/consistent-type-imports': ['error', {
+                prefer: 'type-imports',
+                fixStyle: 'inline-type-imports',
+            }],
             'no-console': ['warn', { allow: ['error'] }],
             'no-restricted-imports': ['error', {
                 name: 'react',
