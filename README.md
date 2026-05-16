@@ -193,6 +193,7 @@ const api = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: 'https://example.com/api',
     timeout: 10_000,
+    credentials: 'include',
     prepareHeaders: (headers) => {
       headers.set('authorization', 'Bearer token');
       return headers;
@@ -220,6 +221,7 @@ Supported options:
 | `params` | request | Append query params |
 | `paramsSerializer` | base query | Customize query string serialization |
 | `body` | request | Send JSON, `FormData`, `Blob`, `URLSearchParams` or another fetch body |
+| `credentials` | both | Control cookie/auth credential handling (`omit`, `same-origin`, `include`) |
 | `timeout` | both | Abort slow requests |
 | `responseHandler` | both | Parse as `json`, `text`, `content-type` or custom handler |
 | `validateStatus` | both | Decide whether a response is success |

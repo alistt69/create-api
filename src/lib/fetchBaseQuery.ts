@@ -119,6 +119,7 @@ export function fetchBaseQuery(
 
         const requestInit: RequestInit = {
             body,
+            credentials: args.credentials ?? options.credentials,
             method,
             headers: finalHeaders,
         };
@@ -154,6 +155,7 @@ export function fetchBaseQuery(
         const fetchFn = options.fetchFn ?? fetch;
 
         const requestForMeta = new Request(finalUrl, {
+            credentials: requestInit.credentials,
             method: requestInit.method,
             headers: requestInit.headers,
         });

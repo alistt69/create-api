@@ -379,6 +379,7 @@ export type FetchBaseQueryError
 
 export interface FetchBaseQueryArgs extends BaseQueryArgs {
     headers?: HeadersInit;
+    credentials?: RequestCredentials;
     responseHandler?: 'json' | 'text' | 'content-type' | ((response: Response) => Promise<unknown>);
     validateStatus?: (response: Response, body: unknown) => boolean;
     timeout?: number;
@@ -386,6 +387,7 @@ export interface FetchBaseQueryArgs extends BaseQueryArgs {
 
 export interface FetchBaseQueryOptions {
     baseUrl?: string;
+    credentials?: RequestCredentials;
     prepareHeaders?: (
         headers: Headers,
         context: { arg: FetchBaseQueryArgs },

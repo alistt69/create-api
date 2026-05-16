@@ -2287,6 +2287,57 @@ describe('fetchBaseQuery', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it('passes credentials from base query options to fetch', async () => {
+        const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            expect(init?.credentials).toBe('include');
+
+            return new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            });
+        });
+
+        const baseQuery = fetchBaseQuery({
+            baseUrl: 'https://api.example.com',
+            credentials: 'include',
+            fetchFn: fetchMock as typeof fetch,
+        });
+
+        const result = await baseQuery({
+            url: '/session',
+        });
+
+        expect(result).toHaveProperty('data');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result.meta?.request.credentials).toBe('include');
+    });
+
+    it('allows request credentials to override base query credentials', async () => {
+        const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            expect(init?.credentials).toBe('omit');
+
+            return new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            });
+        });
+
+        const baseQuery = fetchBaseQuery({
+            baseUrl: 'https://api.example.com',
+            credentials: 'include',
+            fetchFn: fetchMock as typeof fetch,
+        });
+
+        const result = await baseQuery({
+            url: '/public',
+            credentials: 'omit',
+        });
+
+        expect(result).toHaveProperty('data');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(result.meta?.request.credentials).toBe('omit');
+    });
+
     it('returns http error object for non-2xx response', async () => {
         const baseQuery = fetchBaseQuery({
             baseUrl: 'https://api.example.com',
