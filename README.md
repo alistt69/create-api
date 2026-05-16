@@ -358,33 +358,46 @@ For store-based usage, import `createController` from the controller subpath:
 import { createController } from '@alistt69/create-api/controller';
 
 class TicketStore {
-  private ticket = createController(api.endpoints.getTicketById);
-  private editTicket = createController(api.endpoints.editTicket);
+    private ticket = createController(api.endpoints.getTicketById);
+    private editTicket = createController(api.endpoints.editTicket);
 
-  load(id: string) {
-    return this.ticket.run(id);
-  }
+    ticketState = this.ticket.state;
+    editTicketState = this.editTicket.state;
 
-  save(id: string, title: string) {
-    return this.editTicket.run({ id, title });
-  }
+    private unsubscribers = [
+        this.ticket.subscribe(() => {
+            this.ticketState = this.ticket.state;
+        }),
+        this.editTicket.subscribe(() => {
+            this.editTicketState = this.editTicket.state;
+        }),
+    ];
 
-  get ticketData() {
-    return this.ticket.state.data;
-  }
+    load(id: string) {
+        return this.ticket.run(id);
+    }
 
-  get isLoadingTicket() {
-    return this.ticket.state.isLoading;
-  }
+    save(id: string, title: string) {
+        return this.editTicket.run({ id, title });
+    }
 
-  get isSavingTicket() {
-    return this.editTicket.state.isLoading;
-  }
+    get ticketData() {
+        return this.ticketState.data;
+    }
 
-  destroy() {
-    this.ticket.dispose();
-    this.editTicket.dispose();
-  }
+    get isLoadingTicket() {
+        return this.ticketState.isLoading;
+    }
+
+    get isSavingTicket() {
+        return this.editTicketState.isLoading;
+    }
+
+    destroy() {
+        this.unsubscribers.forEach((unsubscribe) => unsubscribe());
+        this.ticket.dispose();
+        this.editTicket.dispose();
+    }
 }
 ```
 

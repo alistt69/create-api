@@ -8,6 +8,7 @@ import {
     type MutationInitiateResult,
     type QueryController,
     type QueryInitiateResult,
+    type QueryStateListener,
 } from '../model/types.js';
 
 export function createController<R, A>(
@@ -35,6 +36,21 @@ function createQueryController<R, A>(
     let currentRequest: QueryInitiateResult<R, A> | undefined;
     let unsubscribeFromEndpoint: (() => void) | undefined;
     let state: InferQueryState<R> = getInitialQueryState<R>();
+    const listeners = new Set<QueryStateListener>();
+
+    const notifyListeners = () => {
+        listeners.forEach((listener) => {
+            listener();
+        });
+    };
+
+    const subscribe = (listener: QueryStateListener) => {
+        listeners.add(listener);
+
+        return () => {
+            listeners.delete(listener);
+        };
+    };
 
     const syncState = () => {
         if (currentArg === undefined) {
@@ -42,6 +58,7 @@ function createQueryController<R, A>(
         }
 
         state = endpoint.select(currentArg);
+        notifyListeners();
     };
 
     const disposeSubscription = () => {
@@ -62,6 +79,7 @@ function createQueryController<R, A>(
             currentRequest = endpoint.initiate(arg);
 
             state = endpoint.select(arg);
+            notifyListeners();
 
             unsubscribeFromEndpoint = endpoint.subscribe(arg, syncState);
 
@@ -82,7 +100,11 @@ function createQueryController<R, A>(
             currentRequest = undefined;
             currentArg = undefined;
             state = getInitialQueryState<R>();
+            notifyListeners();
+            listeners.clear();
         },
+
+        subscribe,
     };
 }
 
@@ -100,10 +122,26 @@ function createMutationController<R, A>(
     let currentRequest: MutationInitiateResult<R, A> | undefined;
     let currentRequestId: string | undefined;
     let state: InferMutationState<R> = getInitialMutationState<R>();
+    const listeners = new Set<QueryStateListener>();
+
+    const notifyListeners = () => {
+        listeners.forEach((listener) => {
+            listener();
+        });
+    };
+
+    const subscribe = (listener: QueryStateListener) => {
+        listeners.add(listener);
+
+        return () => {
+            listeners.delete(listener);
+        };
+    };
 
     const reset = () => {
         currentRequestId = undefined;
         state = getInitialMutationState<R>();
+        notifyListeners();
     };
 
     return {
@@ -123,6 +161,8 @@ function createMutationController<R, A>(
                 isLoading: true,
             };
 
+            notifyListeners();
+
             try {
                 const data = await currentRequest.unwrap();
 
@@ -132,6 +172,8 @@ function createMutationController<R, A>(
                         error: undefined,
                         isLoading: false,
                     };
+
+                    notifyListeners();
                 }
 
                 return data;
@@ -143,6 +185,8 @@ function createMutationController<R, A>(
                         error,
                         isLoading: false,
                     };
+
+                    notifyListeners();
                 }
 
                 throw error;
@@ -159,6 +203,9 @@ function createMutationController<R, A>(
             currentRequest?.abort();
             currentRequest = undefined;
             reset();
+            listeners.clear();
         },
+
+        subscribe,
     };
 }

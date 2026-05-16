@@ -1088,6 +1088,76 @@ describe('createApi core', () => {
         }
     });
 
+    it('notifies query controller subscribers when state changes', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.getTicketById);
+        const listener = vi.fn();
+
+        const unsubscribe = controller.subscribe(listener);
+
+        const promise = controller.run('2');
+
+        expect(listener).toHaveBeenCalled();
+        expect(controller.state.isLoading).toBe(true);
+
+        await advance(200);
+        await promise;
+
+        expect(listener.mock.calls.length).toBeGreaterThanOrEqual(2);
+        expect(controller.state.data?.id).toBe('2');
+
+        const callsAfterUnsubscribe = listener.mock.calls.length;
+
+        unsubscribe();
+
+        act(() => {
+            api.util.setQueryData<TicketDetailResponse>('getTicketById', '2', {
+                id: '2',
+                title: 'After unsubscribe',
+                callNo: 999,
+                servedAt: 'now',
+            });
+        });
+
+        expect(listener).toHaveBeenCalledTimes(callsAfterUnsubscribe);
+
+        controller.dispose();
+    });
+
+    it('notifies mutation controller subscribers when state changes', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.editTicket);
+        const listener = vi.fn();
+
+        const unsubscribe = controller.subscribe(listener);
+
+        const promise = controller.run({
+            id: '2',
+            title: 'Updated through subscribed mutation controller',
+        });
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(controller.state.isLoading).toBe(true);
+
+        await advance(200);
+        await promise;
+
+        expect(listener).toHaveBeenCalledTimes(2);
+        expect(controller.state.isLoading).toBe(false);
+        expect(controller.state.data?.ticket.title).toBe('Updated through subscribed mutation controller');
+
+        unsubscribe();
+
+        controller.reset();
+
+        expect(listener).toHaveBeenCalledTimes(2);
+        expect(controller.state.data).toBeUndefined();
+
+        controller.dispose();
+    });
+
     it('does not json-stringify Blob body', async () => {
         const bodyBlob = new Blob(['hello'], { type: 'text/plain' });
 

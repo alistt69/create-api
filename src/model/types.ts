@@ -48,6 +48,7 @@ export interface QueryController<R, A> {
     run: (arg: A) => Promise<R>;
     refetch: () => Promise<R> | undefined;
     abort: () => void;
+    subscribe: (listener: QueryStateListener) => () => void;
     dispose: () => void;
 }
 
@@ -58,6 +59,7 @@ export interface MutationController<R, A> {
     run: (arg: A) => Promise<R>;
     abort: () => void;
     reset: () => void;
+    subscribe: (listener: QueryStateListener) => () => void;
     dispose: () => void;
 }
 
