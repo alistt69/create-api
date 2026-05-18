@@ -32,7 +32,8 @@ export function createController<R, A>(
 function createQueryController<R, A>(
     endpoint: ApiEndpointQuery<R, A>,
 ): QueryController<R, A> {
-    let currentArg: A | undefined;
+    let currentArg: A;
+    let hasCurrentArg = false;
     let currentRequest: QueryInitiateResult<R, A> | undefined;
     let unsubscribeFromEndpoint: (() => void) | undefined;
     let state: InferQueryState<R> = getInitialQueryState<R>();
@@ -53,7 +54,7 @@ function createQueryController<R, A>(
     };
 
     const syncState = () => {
-        if (currentArg === undefined) {
+        if (!hasCurrentArg) {
             return;
         }
 
@@ -73,6 +74,7 @@ function createQueryController<R, A>(
 
         run(arg: A) {
             currentArg = arg;
+            hasCurrentArg = true;
             disposeSubscription();
 
             currentRequest?.unsubscribe();
@@ -98,8 +100,8 @@ function createQueryController<R, A>(
             disposeSubscription();
             currentRequest?.unsubscribe();
             currentRequest = undefined;
-            currentArg = undefined;
-            state = getInitialQueryState<R>();
+            hasCurrentArg = false;
+            state = getInitialQueryState();
             notifyListeners();
             listeners.clear();
         },

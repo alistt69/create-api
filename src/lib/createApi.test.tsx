@@ -223,6 +223,9 @@ function setupApi() {
                 keepUnusedDataFor: 10000,
                 providesTags: (_result, arg) => [`Ticket/${arg}`],
             }),
+            getMissingTicket: builder.query<TicketDetailResponse, void>({
+                query: () => ({ url: '/tickets/missing', method: 'GET' }),
+            }),
             editTicket: builder.mutation<EditTicketResponse, { id: string; title: string; delayMs?: number }>({
                 query: (payload) => ({ url: `/tickets/${payload.id}`, method: 'PATCH', body: payload }),
                 invalidates: ['getTickets'],
@@ -791,6 +794,33 @@ describe('createApi core', () => {
         controller.dispose();
 
         expect(controller.state.isUninitialized).toBe(true);
+    });
+
+    it('updates controller state after void query rejects', async () => {
+        const { api } = setupApi();
+
+        const controller = createController(api.endpoints.getMissingTicket);
+
+        const promise = controller.run(undefined);
+
+        expect(controller.state.isLoading).toBe(true);
+
+        const expectation = expect(promise).rejects.toMatchObject({
+            status: 404,
+        });
+
+        await advance(100);
+
+        await expectation;
+
+        expect(controller.state.isLoading).toBe(false);
+        expect(controller.state.isFetching).toBe(false);
+        expect(controller.state.isError).toBe(true);
+        expect(controller.state.error).toMatchObject({
+            status: 404,
+        });
+
+        controller.dispose();
     });
 
     it('updates controller state after tag invalidation refetch', async () => {
